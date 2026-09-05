@@ -6,11 +6,13 @@ corpus deliberately does not pin it: three implementations word these
 differently on purpose, and asserting the prose holds every language to a
 translation.
 
-The rows that diverge are asserted as DIVERGENCES rather than skipped. All three
-languages refuse the same URLs -- the security behaviour is identical and every
-private address is blocked -- but the reference names it
-``private_network_refused`` and this port names it ``private_address_refused``.
-See G-21.
+G-21 IS CLOSED AND EVERY ROW NOW AGREES. Three of them used to be recorded as
+divergences: all three languages refused the same URLs -- the security behaviour
+was identical and every private address was blocked -- but the reference named
+it ``private_network_refused`` and exposed it as ``$refused->reason``, where this
+port has always said ``private_address_refused`` on ``.code``. The REFERENCE
+moved, because the check is per-address rather than per-network. Nothing changed
+in this port, only what it is allowed to expect of the reference.
 
 Mirrors prism-browser-ts/test/url-policy-corpus.test.ts case for case.
 """
@@ -29,8 +31,7 @@ CORPUS: dict[str, Any] = json.loads(
     (Path(__file__).parent / "fixtures" / "browser-url-policy.json").read_text(encoding="utf-8")
 )
 CASES: list[dict[str, Any]] = CORPUS["cases"]
-AGREEING = [case for case in CASES if case["agrees"]]
-DIVERGING = [case for case in CASES if not case["agrees"]]
+PRIVATE_ADDRESS = [case for case in CASES if case["refusal"]["py"] == "private_address_refused"]
 
 
 def _id(case: dict[str, Any]) -> str:
@@ -61,33 +62,34 @@ def test_produces_this_languages_recorded_code(case: dict[str, Any]) -> None:
     assert _refusal_of(case) == case["refusal"]["py"]
 
 
-@pytest.mark.parametrize("case", AGREEING, ids=_id)
+@pytest.mark.parametrize("case", CASES, ids=_id)
 def test_agrees_with_the_php_reference(case: dict[str, Any]) -> None:
     assert _refusal_of(case) == case["refusal"]["php"]
 
 
-@pytest.mark.parametrize("case", DIVERGING, ids=_id)
-def test_refuses_like_the_reference_but_names_it_differently(case: dict[str, Any]) -> None:
-    # Two assertions, and both matter. The behaviour is identical -- every one
-    # of these is refused in all three languages -- and only the code differs.
-    # Asserting the refusal happened is what keeps this a naming finding rather
-    # than letting a real hole hide behind the word "divergence".
-    produced = _refusal_of(case)
-
-    assert produced is not None
-    assert produced != case["refusal"]["php"]
+def test_records_no_divergence_left_to_explain() -> None:
+    # The list is asserted rather than the absence, so that a row quietly
+    # flipped back to ``agrees: false`` fails here instead of being filtered
+    # out silently everywhere else.
+    assert [case["id"] for case in CASES if not case["agrees"]] == []
 
 
-def test_diverges_on_exactly_the_three_rows_the_manifest_names() -> None:
-    assert [case["id"] for case in DIVERGING] == ["url-0005", "url-0006", "url-0007"]
+def test_refuses_every_private_address_on_exactly_the_rows_that_claim_to() -> None:
+    # The security claim, stated independently of the code comparison. The
+    # comparisons above only check that this language produces the string the
+    # corpus recorded; if a change turned one of these into an ALLOW, the corpus
+    # would be regenerated to record the allow and they would all stay green.
+    # This is what would go red.
+    assert [case["id"] for case in PRIVATE_ADDRESS] == ["url-0005", "url-0006", "url-0007"]
+
+    for case in PRIVATE_ADDRESS:
+        assert _refusal_of(case) == "private_address_refused", case["id"]
 
 
-def test_refuses_every_private_address_in_the_corpus_whatever_it_calls_it() -> None:
-    # The security claim, stated independently of the naming argument. If a
-    # future rename accidentally turned one of these into an allow, the
-    # divergence tests above would still pass -- they only compare codes.
-    for case in DIVERGING:
-        assert _refusal_of(case) is not None, case["id"]
+def test_never_answers_to_the_references_retired_name() -> None:
+    for case in CASES:
+        recorded = [case["refusal"][language] for language in ("php", "ts", "py")]
+        assert "private_network_refused" not in recorded, case["id"]
 
 
 def test_agrees_with_typescript_on_every_row() -> None:
