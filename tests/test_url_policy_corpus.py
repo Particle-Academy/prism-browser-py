@@ -54,7 +54,7 @@ def _refusal_of(case: dict[str, Any]) -> str | None:
 
 
 def test_the_corpus_is_whole_not_a_subset_someone_trimmed_to_green() -> None:
-    assert len(CASES) == 12
+    assert len(CASES) == 18
 
 
 @pytest.mark.parametrize("case", CASES, ids=_id)
@@ -80,7 +80,16 @@ def test_refuses_every_private_address_on_exactly_the_rows_that_claim_to() -> No
     # corpus recorded; if a change turned one of these into an ALLOW, the corpus
     # would be regenerated to record the allow and they would all stay green.
     # This is what would go red.
-    assert [case["id"] for case in PRIVATE_ADDRESS] == ["url-0005", "url-0006", "url-0007"]
+    assert [case["id"] for case in PRIVATE_ADDRESS] == [
+        "url-0005",
+        "url-0006",
+        "url-0007",
+        "url-0013",
+        "url-0014",
+        "url-0015",
+        "url-0016",
+        "url-0017",
+    ]
 
     for case in PRIVATE_ADDRESS:
         assert _refusal_of(case) == "private_address_refused", case["id"]
