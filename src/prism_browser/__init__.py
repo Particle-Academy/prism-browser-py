@@ -6,6 +6,7 @@ import html
 import ipaddress
 import json as _json
 import secrets
+import socket
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -181,15 +182,79 @@ def _is_private_host(host: str) -> bool:
         return True
 
     try:
-        address = ipaddress.ip_address(host)
+        address = str(ipaddress.ip_address(host))
     except ValueError:
-        return False
+        # A browser resolves shorthand, integer, octal and hex IPv4 (127.1,
+        # 0x7f000001, 2130706433) to an address without DNS, and urlsplit does
+        # not normalise them. inet_aton reads them the way libc does, also
+        # without DNS. Anything else is a name, judged by the allow-list.
+        try:
+            address = socket.inet_ntoa(socket.inet_aton(host))
+        except OSError:
+            return False
 
-    # `is_link_local` is what catches 169.254.169.254, the cloud metadata
-    # endpoint, which is the single most valuable target an SSRF can reach.
-    return (
-        address.is_private or address.is_loopback or address.is_link_local or address.is_unspecified
+    return _is_non_public_address(address)
+
+
+# Every range a browser must not be pointed at, as an EXPLICIT list (G-89): the
+# same one core's guarded media fetch uses, spelled identically in every
+# language. is_private/is_loopback/is_link_local were the whole check and they
+# drift both ways: they left out CGNAT, where Alibaba Cloud's metadata endpoint
+# lives, and multicast, yet refused every 6to4 address, public ones included.
+_NON_PUBLIC = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.0.0.0/24",
+        "192.0.2.0/24",
+        "192.168.0.0/16",
+        "198.18.0.0/15",
+        "198.51.100.0/24",
+        "203.0.113.0/24",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+        "::/96",
+        "::ffff:0:0/96",
+        "64:ff9b:1::/48",
+        "100::/64",
+        "2001::/32",
+        "2001:db8::/32",
+        "fc00::/7",
+        "fe80::/10",
+        "fec0::/10",
+        "ff00::/8",
     )
+)
+
+# NAT64 and 6to4 carry an IPv4 address inside an IPv6 one, and the packet goes
+# to the embedded address, so that is what is judged. Not refused outright: a
+# DNS64 network gives public sites 64:ff9b:: addresses.
+# (network, byte offset of the embedded IPv4)
+_EMBEDDING = (
+    (ipaddress.ip_network("64:ff9b::/96"), 12),
+    (ipaddress.ip_network("2002::/16"), 2),
+)
+
+
+def _is_non_public_address(text: str) -> bool:
+    if "%" in text:
+        return True
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return True
+    if address.version == 6:
+        for network, offset in _EMBEDDING:
+            if address in network:
+                return _is_non_public_address(
+                    str(ipaddress.IPv4Address(address.packed[offset : offset + 4]))
+                )
+    return any(address in network for network in _NON_PUBLIC)
 
 
 # -- observations ------------------------------------------------------------
