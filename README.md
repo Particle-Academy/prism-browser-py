@@ -39,9 +39,8 @@ the agent may go, and what it may do there.
 - **HTTPS** is required by default.
 - **Ports** default to 443 only.
 - **URLs with credentials** (`https://user:pass@host`) are refused.
-- **Private, loopback and link-local addresses** are refused by default,
+- **Private, loopback and link-local addresses** are always refused,
   including `localhost` and the cloud metadata address `169.254.169.254`.
-  `allow_private_addresses=True` turns that off.
 - **Actions** are an allow-list of `click`, `fill`, `select`, `press`, `scroll`
   and `hover`. All six are allowed unless you pass `allowed_actions`.
 

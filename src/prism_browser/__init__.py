@@ -83,7 +83,6 @@ class BrowserPolicy:
         require_https: bool = True,
         max_observation_bytes: int = 65_536,
         allowed_ports: Sequence[int] | None = None,
-        allow_private_addresses: bool = False,
     ) -> None:
         self.allowed_hosts = list(allowed_hosts)
         self.allowed_actions = list(
@@ -92,13 +91,6 @@ class BrowserPolicy:
         self.require_https = require_https
         self.max_observation_bytes = max_observation_bytes
         self.allowed_ports = list(allowed_ports if allowed_ports is not None else [443])
-        #: OFF by default, and the reason is SSRF: a browser an agent can point
-        #: at http://169.254.169.254/ is a cloud metadata endpoint an agent can
-        #: read, and one pointed at localhost reaches every service on the host
-        #: that assumed it was unreachable. Turning this on is a real decision
-        #: about a real network, so it is spelled explicitly rather than inferred
-        #: from a host list.
-        self.allow_private_addresses = allow_private_addresses
 
     def assert_url(self, url: str) -> None:
         parts = urlsplit(url)
@@ -122,7 +114,7 @@ class BrowserPolicy:
 
         host = parts.hostname.lower().rstrip(".")
 
-        if not self.allow_private_addresses and _is_private_host(host):
+        if _is_private_host(host):
             raise BrowserRefused(
                 RefusalCode.PRIVATE_ADDRESS_REFUSED,
                 f"Browser policy refuses the private or loopback host [{host}]. A browser an "
@@ -156,7 +148,6 @@ class BrowserPolicy:
             "require_https": self.require_https,
             "max_observation_bytes": self.max_observation_bytes,
             "allowed_ports": list(self.allowed_ports),
-            "allow_private_addresses": self.allow_private_addresses,
         }
 
     def _matches_allowed_host(self, host: str) -> bool:
