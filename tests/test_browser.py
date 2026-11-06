@@ -87,17 +87,15 @@ def test_refuses_private_and_loopback_addresses_even_when_allow_listed() -> None
             permissive.assert_url(f"http://{host}/")
 
 
-def test_lets_a_private_address_through_only_when_asked_explicitly() -> None:
-    # A real decision about a real network, spelled out rather than inferred
-    # from a host list.
+def test_refuses_a_declared_private_address_even_with_https_disabled() -> None:
     allowed = BrowserPolicy(
         allowed_hosts=["localhost"],
         require_https=False,
         allowed_ports=[8080],
-        allow_private_addresses=True,
     )
 
-    allowed.assert_url("http://localhost:8080/")
+    with pytest.raises(BrowserRefused):
+        allowed.assert_url("http://localhost:8080/")
 
 
 def test_refuses_something_that_is_not_a_url_at_all() -> None:
@@ -134,7 +132,7 @@ def test_reports_itself_as_data() -> None:
 
     assert reported["require_https"] is True
     assert reported["allowed_ports"] == [443]
-    assert reported["allow_private_addresses"] is False
+    assert "allow_private_addresses" not in reported
 
 
 # -- the observation guard ---------------------------------------------------
